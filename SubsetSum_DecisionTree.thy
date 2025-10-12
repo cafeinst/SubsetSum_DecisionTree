@@ -2,12 +2,31 @@ theory SubsetSum_DecisionTree
   imports "Complex_Main" "HOL-Real_Asymp.Real_Asymp"
     "Weighted_Arithmetic_Geometric_Mean.Weighted_Arithmetic_Geometric_Mean"
 begin
-section ‹0/1 integer vectors and bounded sums›
+text ‹
+  ‹SubsetSum_DecisionTree› is a self-contained combinatorial backbone for our later
+  TM bridges. It provides:
+
+  • 0/1 vectors and restricted subset-sum operators (prefix/suffix).
+  • A clean split at a pivot k: we count distinct values of the LHS (prefix sums)
+    and RHS (“required suffix”) ranges.
+  • A decision-tree reader model with “seen” indices and a coverage lemma (Lemma 1)
+    showing that every relevant index must be queried on every path.
+  • An AM–GM step that turns the product lower bound into a √(2^n) lower bound on
+    the number of queries/steps.
+  • A canonical distinct family (weights 2^i) that witnesses hardness for every n.
+
+  The file does *not* assume any TM model; it is purely combinatorial. Later files
+  only need to instantiate “steps ≥ |seenL| + |seenR|” and identify seen-sets with
+  our LHS/RHS windows to import the lower bound.
+›
 
 text ‹
-  We represent selections by 0/1 integer vectors of a fixed length.
-  For a list @{term "as :: int list"} and a 0/1 vector @{term "xs :: int list"},
-  the subset-sum value is the dot product restricted to a set of indices.
+  ‹bitvec k› = all 0/1 lists of length k over integers (not booleans).
+  This lets us use integer arithmetic directly in the subset-sum objectives.
+
+  Frequently used facts:
+    • ‹finite_bitvec›, ‹card_bitvec› = 2^k
+    • Suc-decomposition lemmas split ‹bitvec (Suc n)› by the head bit.
 ›
 
 definition bitvec :: "nat ⇒ int list set" where
@@ -91,6 +110,21 @@ next
   finally show ?case .
 qed
 
+text ‹
+  Restricted sums and the pivot split.
+
+  • ‹sum_as_on as I xs› = weighted sum over indices I.
+  • ‹lhs_of as k xs›    = prefix sum over ‹{0..<k}›.
+  • ‹rhs_of as k s xs›  = the value that the suffix must realize so that the full sum
+                          equals s: namely ‹s − ∑_{i∈{k..<length as}} as!i * xs!i›.
+  • ‹e_k as s k xs›     = pair ‹(lhs, rhs)› extracted from a single 0/1 selection.
+
+  Later we form value-sets
+    ‹LHS (e_k as s k) n› = { lhs_of … | xs ∈ bitvec n }
+    ‹RHS (e_k as s k) n› = { rhs_of … | xs ∈ bitvec n }
+  and count them under “distinct subset sums”.
+›
+
 definition sum_as_on :: "int list ⇒ nat set ⇒ int list ⇒ int" where
   "sum_as_on as I xs = (∑ i ∈ I. as ! i * xs ! i)"
 
@@ -109,17 +143,36 @@ definition LHS :: "(int list ⇒ int × int) ⇒ nat ⇒ int set" where
 definition RHS :: "(int list ⇒ int × int) ⇒ nat ⇒ int set" where
   "RHS e n = {snd (e xs) | xs. xs ∈ bitvec n}"
 
-section ‹Distinct-subset-sums (full length)›
-
 text ‹
-  Distinct subset sums: different 0/1 n-vectors yield different total sums.
+  Distinct-subset-sums property:
+  different 0/1 vectors of length ‹length as› yield different full sums
+    ‹∑ i<length as. as!i * xs!i›.
+
+  This is the injectivity hypothesis used to show large LHS/RHS images.
+  The canonical example we use later is ‹as = map (λi. 2^i) [0..<n]›.
 ›
 definition distinct_subset_sums :: "int list ⇒ bool" where
   "distinct_subset_sums as ≡
      (∀xs∈bitvec (length as). ∀ys∈bitvec (length as).
         xs ≠ ys ⟶ (∑ i < length as. as ! i * xs ! i) ≠ (∑ i < length as. as ! i * ys ! i))"
 
-section ‹Padding lemmas for prefix/suffix reasoning›
+text ‹
+  Padding & splitting toolkit (prefix/suffix technology).
+
+  Goal: reduce any statement about a length-‹n› vector to a statement about a
+  length-‹k› prefix (resp. ‹n−k› suffix) plus zero padding, so that we can
+  (i) push sums to the prefix or suffix and (ii) reindex suffix binders to ‹{0..<n−k}›.
+
+  Typical flow:
+    xs ∈ bitvec n
+    p  = take k xs   (p ∈ bitvec k),     pad tail with 0s
+    q  = drop k xs   (q ∈ bitvec (n−k)), pad head with 0s
+    reindex ‹{k..<n}› ↔ ‹{0..<n−k}› using ‹sum_reindex_add›.
+
+  These lemmas are used in the LHS/RHS cardinality proofs to show:
+    LHS = f  ` bitvec k   with f injective
+    RHS = g  ` bitvec (n−k) with g injective
+›
 
 lemma pad_suffix_zeros_in_bitvec:
   assumes "p ∈ bitvec k" "n ≥ k"
@@ -224,6 +277,21 @@ proof -
   moreover have "i - k < n - k" using in_lt ik by arith
   ultimately show ?thesis by simp
 qed
+
+text ‹
+  Counting images under distinctness.
+
+  For fixed ‹as, s, n, k› with ‹k ≤ n› and ‹distinct_subset_sums as›:
+    • Every LHS value comes from a *unique* prefix p ∈ bitvec k
+      (tail padded with zeros) ⇒ ‹card LHS = 2^k›.
+    • Every RHS value comes from a *unique* suffix q ∈ bitvec (n−k)
+      (head padded with zeros) ⇒ ‹card RHS = 2^(n−k)›.
+
+  The key step is using distinctness on *padded* vectors of length n.
+  We collect the product identity:
+
+    lemma2_split:  card LHS * card RHS = 2^n.
+›
 
 lemma card_LHS_e_k:
   fixes as :: "int list" and s :: int and n k :: nat
@@ -493,6 +561,15 @@ proof -
     by (simp add: power_add[symmetric] kn)
 qed
 
+text ‹
+  From product to sum via AM–GM.
+
+  If ‹A = card LHS› and ‹B = card RHS› then ‹A * B = 2^n›, hence by AM–GM we obtain
+    ‹A + B ≥ 2 * sqrt (2^n)›.
+  We package that as ‹lhs_rhs_sum_lower_bound›, which is the quantitative driver
+  we will feed into “steps ≥ |seenL| + |seenR|”.
+›
+
 lemma lemma3_AFP:
   fixes A B :: real and n :: nat
   assumes A0: "A ≥ 0" and B0: "B ≥ 0"
@@ -539,7 +616,23 @@ proof -
   by simp
 qed
 
-section ‹Decision-tree reader model and coverage (Lemma 1)›
+text ‹
+  Abstract decision-tree reader.
+
+  • The tree alternately asks left indices ‹iL› (constructor ‹AskL›) or right indices
+    ‹iR› (constructor ‹AskR›) and branches on oracle answers ‹oL i› / ‹oR j›.
+  • ‹run oL oR T› evaluates the tree to a boolean.
+  • ‹seenL_run› and ‹seenR_run› are the *sets of queried indices along the taken path*.
+  • ‹steps_run› is the path length (number of queries).
+
+  We also define a well-formedness predicate ‹wf_dtr L R T› stating that the tree
+  only asks indices from declared sets ‹L› and ‹R›, and prove:
+
+    – If two oracles agree on all indices seen along the path, the run result and
+      seen-sets are equal (agree-on-seen principle).
+    – ‹card (seenL_run) ≤ steps› and ‹card (seenR_run) ≤ steps›, hence
+      ‹steps ≥ |seenL| + |seenR|›.
+›
 
 datatype ('iL,'iR) dtr =
     Leaf bool
@@ -887,11 +980,36 @@ next
   finally show ?case .
 qed
 
-(* powers-of-two as ints *)
+text ‹
+  Canonical distinct family: powers of two.
+
+  We instantiate the weights as ‹as = map (λi. 2^i) [0..<n]› and prove that they
+  are superincreasing (each weight exceeds the sum of all previous), which implies
+  ‹distinct_subset_sums as›. This gives “hard” instances for every n:
+
+    exists_hard: ∀n. ∃as. length as = n ∧ distinct_subset_sums as.
+›
+
 definition pow2_list :: "nat ⇒ int list" where
   "pow2_list n = map (λi. (2::int)^i) [0..<n]"
 
-text ‹A generic adversary/coverage locale: this abstracts Lemma 1.›
+text ‹
+  Coverage lemma (Lemma 1 in abstract form).
+
+  Assume:
+    • The tree is well-formed.
+    • ‹run› is *extensionally correct* for some specification ‹good oL oR›.
+    • For every left index i ∈ Lset, there is a *pointwise flip* of the left oracle
+      (changing only i) that flips the truth of ‹good›; similarly for right indices.
+
+  Then for *all* inputs (all oracles) we must have:
+    • Every left index is *seen* (otherwise flipping it would not be detected),
+    • Every right index is *seen*,
+    hence  ‹seenL_run = Lset› and ‹seenR_run = Rset› and therefore
+          ‹steps ≥ card Lset + card Rset›.
+
+  This is the model-independent “must read everything relevant” statement.
+›
 locale DecisionTree_Coverage =
   fixes Lset :: "'iL set" and Rset :: "'iR set"
   fixes T    :: "('iL,'iR) dtr"
@@ -1009,6 +1127,24 @@ proof -
 qed
 
 end  (* SubsetSum_Reader_NoK *)
+
+text ‹
+  Abstract reader interface (no machine model).
+
+  You supply:
+    • ‹steps as s›: number of queries/steps used to decide “∃xs: sum(as,xs)=s”.
+    • ‹seenL as s k› and ‹seenR as s k›: the sets of left/right indices read when
+      the reader uses pivot k.
+  Assumptions:
+    • ‹coverage_ex›: On distinct weights, there *exists* a k ≤ n such that
+      ‹seenL = LHS (e_k …)› and ‹seenR = RHS (e_k …)› — i.e. Lemma 1 instantiated.
+    • ‹steps_lb›: A general “reader cost” inequality, steps ≥ |seenL| + |seenR|.
+
+  Consequences:
+    • ‹subset_sum_sqrt_lower_bound›: steps ≥ 2√(2^n) on distinct instances.
+    • ‹no_polytime_decider_on_distinct_family›: no polynomial (in n) worst-case bound
+      exists across all distinct families.
+›
 
 locale SubsetSum_To_Polytime_NoK =
   SubsetSum_Reader_NoK +
@@ -1402,54 +1538,12 @@ proof
 qed
 end
 
-section ‹Cook–Levin: conclude SUBSET-SUM ∉ P (conditional on the bridge)›
-
-context SubsetSum_To_Polytime_NoK
-begin
-
-context
-  fixes E :: "int list ⇒ int ⇒ bool list"
-  assumes E_len_overhead:
-    "∃A B. ∀as s. length (E as s) ≤ A * length (enc as s) + B"
-begin
-
-definition SUBSET_SUM_CL :: "bool list set" where
-  "SUBSET_SUM_CL =
-     { E as s | as s.
-         (∃xs∈bitvec (length as). (∑ i < length as. as ! i * xs ! i) = s) }"
-
-theorem subset_sum_not_in_P_CL:
-  shows "SUBSET_SUM_CL ∉ P"
-proof
-  assume Pin: "SUBSET_SUM_CL ∈ P"
-
-  (* From membership in P, get a poly bound in the encoding length. *)
-  from Pin obtain c d where cpos: "c > 0"
-    and enc_steps:
-      "∀as s. steps as s ≤ nat (ceiling (c * (real (length (enc as s))) ^ d))"
-    using steps_poly_of_enc by blast
-
-  (* Turn “poly in |enc|” into “poly in n = length as” on DISTINCT instances. *)
-  from steps_poly_in_n_on_distinct
-  obtain c' d' where c'pos: "c' > 0"
-    and poly_n:
-      "∀as s n. n = length as ⟶ distinct_subset_sums as ⟶
-                 steps as s ≤ nat (ceiling (c' * (real n) ^ d'))"
-    by blast
-
-  (* Package it in the exact shape that the impossibility theorem forbids. *)
-  have ex_cd':
-    "∃(c''::real)>0. ∃(d''::nat).
-        ∀as s. distinct_subset_sums as ⟶
-          steps as s ≤ nat (ceiling (c'' * (real (length as)) ^ d''))"
-    using c'pos poly_n by blast
-
-  (* Contradiction with your lower-bound theorem over DISTINCT families. *)
-  from no_polytime_decider_on_distinct_family ex_cd' show False by blast
-qed
-
-end  (* inner context with E *)
-end  (* SubsetSum_To_Polytime_NoK *)
+text ‹
+  Auxiliary summation identity and a second, compact proof of distinctness for
+  ‹pow2_list›. These are convenient local copies for later files that only need
+  the statement “pow2_list has distinct subset sums” without importing all earlier
+  lemmas.
+›
 
 lemma sum_lessThan_split_at:
   fixes f :: "nat ⇒ 'a::comm_monoid_add"
