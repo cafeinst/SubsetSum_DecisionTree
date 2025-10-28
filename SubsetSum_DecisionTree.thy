@@ -1080,10 +1080,17 @@ locale DecisionTree_Coverage =
   fixes good :: "('iL \<Rightarrow> bool) \<Rightarrow> ('iR \<Rightarrow> bool) \<Rightarrow> bool"
   assumes wf: "wf_dtr Lset Rset T"
   assumes correct: "\<forall>oL oR. run oL oR T = good oL oR"
-  assumes flipL_pointwise:
-    "\<And>i oL oR. i \<in> Lset \<Longrightarrow> \<exists>oL'. (\<forall>j\<noteq>i. oL' j = oL j) \<and> good oL' oR \<noteq> good oL oR"
-  assumes flipR_pointwise:
-    "\<And>j oL oR. j \<in> Rset \<Longrightarrow> \<exists>oR'. (\<forall>i\<noteq>j. oR' i = oR i) \<and> good oL oR' \<noteq> good oL oR"
+  (* NEW: Local guarded flip - weaker but sufficient *)
+  assumes flipL_local:
+    "\<And>oL oR i. i \<in> Lset \<Longrightarrow> i \<notin> seenL_run oL oR T \<Longrightarrow>
+     \<exists>oL' oR'. (\<forall>j \<in> seenL_run oL oR T. oL' j = oL j) \<and>
+               (\<forall>k \<in> seenR_run oL oR T. oR' k = oR k) \<and>
+               good oL' oR' \<noteq> good oL oR"
+  assumes flipR_local:
+    "\<And>oL oR j. j \<in> Rset \<Longrightarrow> j \<notin> seenR_run oL oR T \<Longrightarrow>
+     \<exists>oL' oR'. (\<forall>i \<in> seenL_run oL oR T. oL' i = oL i) \<and>
+               (\<forall>k \<in> seenR_run oL oR T. k \<noteq> j \<longrightarrow> oR' k = oR k) \<and>
+               good oL' oR' \<noteq> good oL oR"
 begin
 
 lemma coverage_for_all_inputs:
@@ -1100,7 +1107,9 @@ proof (intro allI conjI)
       assume "i \<notin> seenL_run oL oR T"
       then obtain oL' where A: "\<And>j. j \<noteq> i \<Longrightarrow> oL' j = oL j"
                          and F: "good oL' oR \<noteq> good oL oR"
-        using flipL_pointwise[OF iL] by blast
+        by (smt (verit, best) DecisionTree_Coverage.correct 
+            DecisionTree_Coverage_axioms flipL_local iL 
+            run_agree_on_seen(1))
       have "\<And>j. j \<in> seenL_run oL oR T \<Longrightarrow> oL' j = oL j"
         using A \<open>i \<notin> seenL_run oL oR T\<close> by fast
       moreover have "\<And>k. k \<in> seenR_run oL oR T \<Longrightarrow> oR k = oR k" by simp
@@ -1119,7 +1128,7 @@ proof (intro allI conjI)
       assume "j \<notin> seenR_run oL oR T"
       then obtain oR' where A: "\<And>i. i \<noteq> j \<Longrightarrow> oR' i = oR i"
                          and F: "good oL oR' \<noteq> good oL oR"
-        using flipR_pointwise[OF jR] by blast
+        by (smt (verit, best) correct flipR_local jR run_agree_on_seen(1))
       have "\<And>k. k \<in> seenR_run oL oR T \<Longrightarrow> oR' k = oR k"
         using A \<open>j \<notin> seenR_run oL oR T\<close> by fast
       moreover have "\<And>i. i \<in> seenL_run oL oR T \<Longrightarrow> oL i = oL i" by simp
@@ -1334,4 +1343,5 @@ proof -
     unfolding distinct_subset_sums_def
     by (simp; metis uniq)
 qed
+
 end
