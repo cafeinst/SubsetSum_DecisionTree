@@ -2,115 +2,31 @@ theory SubsetSum_DecisionTree
   imports "Complex_Main" "HOL-Real_Asymp.Real_Asymp"
     "Weighted_Arithmetic_Geometric_Mean.Weighted_Arithmetic_Geometric_Mean"
 begin
-text \<open>
-  \paragraph{Overview.}
-  We give a \emph{self-contained} combinatorial lower bound for Subset-Sum that
-  does not assume any particular machine model. The argument proceeds in three
-  clean steps that are fully formalized in this entry:
 
-  \begin{enumerate}
-  \item \textbf{Prefix/suffix split at a pivot \emph{k}.}
-        For a weight vector \<open>as\<close> of length \<open>n\<close> and target \<open>s\<close>, we consider the map
-        \<open>e_k as s k xs = (lhs, rhs)\<close> that extracts from a 0/1 vector \<open>xs\<close> the
-        prefix sum over \<open>{0..<k}\<close> and the “required suffix’’
-        \<open>s − \<Sum>_{i\<in>{k..<n}} as!i * xs!i\<close>. This yields value sets
-        \<open>LHS (e_k as s k) n\<close> and \<open>RHS (e_k as s k) n\<close> ranging over all
-        \<open>xs \<in> bitvec n\<close>.
+(* ========================================================================= *)
+(* PART 1: Bitvectors and Subset-Sum Setup                                  *)
+(* ========================================================================= *)
 
-        Under the \emph{distinct subset-sums} hypothesis
-        (different 0/1 selections yield different full sums),
-        we prove that padding with zeros makes the prefix and the suffix
-        images injective in their respective dimensions:
-        \<open>card (LHS (e_k as s k) n) = 2^k\<close> and
-        \<open>card (RHS (e_k as s k) n) = 2^(n−k)\<close>
-        (lemmas \<open>card_LHS_e_k\<close> and \<open>card_RHS_e_k\<close>).
-        Hence their product is always \<open>2^n\<close> (theorem \<open>lemma2_split\<close>).
-
-  \item \textbf{From product to sum via AM–GM.}
-        Since \<open>card LHS \<sqdot> card RHS = 2^n\<close>, the arithmetic–geometric mean
-        inequality gives
-        \<open>card LHS + card RHS \<ge> 2 \<sqdot> sqrt (2^n)\<close>
-        (lemma \<open>lemma3_AFP\<close> and corollary \<open>lhs_rhs_sum_lower_bound\<close>).
-        This step is purely analytic and independent of any algorithmic model.
-
-  \item \textbf{Decision-tree coverage \<Rightarrow> you must read everything relevant.}
-        We model readers as abstract decision trees that alternately query a
-        left or right index and branch on yes/no answers. For any well-formed
-        tree \<open>T\<close> that is \emph{extensionally correct} for a given specification
-        \<open>good\<close>, and for which every index on each side admits a pointwise
-        “truth-flipping’’ perturbation, we prove that along every run the set
-        of queried left (resp.\ right) indices equals the entire declared left
-        (resp.\ right) set (locale \<open>DecisionTree_Coverage\<close>, lemma
-        \<open>coverage_for_all_inputs\<close>). In particular,
-        \<open>steps \<ge> |seenL| + |seenR|\<close> (lemma \<open>steps_ge_sum_seen\<close>) and therefore,
-        with the pivot \<open>k\<close> chosen as in Step~1,
-        \<open>steps \<ge> card LHS + card RHS\<close> (lemma \<open>steps_lower_bound_all\<close>).
-  \end{enumerate}
-
-  Putting the three steps together yields the quantitative lower bound
-  \<open>steps \<ge> 2 \<sqdot> sqrt (2^n)\<close> for all instances with distinct subset sums
-  (locale \<open>SubsetSum_Reader_NoK\<close>, theorem \<open>subset_sum_sqrt_lower_bound\<close>).
-  The whole proof is model-agnostic: it uses only combinatorics on 0/1 vectors,
-  the padding/reindexing toolkit, and AM–GM. Any subsequent “TM bridge’’
-  (e.g.\ via a correctness/coverage argument showing that the machine’s
-  observable reads realize our \<open>seenL/seenR\<close> windows and obey
-  \<open>steps \<ge> |seenL| + |seenR|\<close>) can import this bound as a black box.
-
-  \paragraph{Canonical hard family.}
-  We also provide a standard superincreasing weight family
-  \<open>pow2_list n = [1,2,4,\<dots>,2^{n−1}]\<close> and prove that it has distinct
-  subset sums (lemma \<open>distinct_subset_sums_pow2_list\<close>). Hence, for every
-  \<open>n\<close> there exist inputs witnessing the lower bound.
-
- \paragraph{Why we use the explicit extractor \<open>e_k\<close>.}
-We deliberately avoid introducing a global “set of equivalent equations’’
-for the subset-sum predicate. Instead, we fix a concrete pivot \<open>k\<close> and use the
-explicitly defined extractor \<open>e_k\<close> to obtain the two value-sets we count,
-\<open>LHS (e_k as s k) n\<close> and \<open>RHS (e_k as s k) n\<close>. This keeps the development
-local and assumption-light: apart from the single combinatorial hypothesis
-\<open>distinct_subset_sums as\<close> used to derive exact cardinalities in Step~1,
-all other ingredients (AM–GM, coverage, and the inequality
-\<open>steps \<ge> |seenL| + |seenR|\<close>) are proved inside this file. The later
-machine bridges then only need to identify their observable “seen’’
-indices with these concrete \<open>LHS/RHS\<close> windows for some pivot \<open>k\<close>, rather
-than reasoning about an amorphous space of “equivalent’’ equations.
-\<close>
-text \<open>
-  \<open>SubsetSum_DecisionTree\<close> is a self-contained combinatorial backbone for our later
-  TM bridges. It provides:
-
-  • 0/1 vectors and restricted subset-sum operators (prefix/suffix).
-  • A clean split at a pivot k: we count distinct values of the LHS (prefix sums)
-    and RHS (“required suffix”) ranges.
-  • A decision-tree reader model with “seen” indices and a coverage lemma (Lemma 1)
-    showing that every relevant index must be queried on every path.
-  • An AM–GM step that turns the product lower bound into a \<surd>(2^n) lower bound on
-    the number of queries/steps.
-  • A canonical distinct family (weights 2^i) that witnesses hardness for every n.
-
-  The file does *not* assume any TM model; it is purely combinatorial. Later files
-  only need to instantiate “steps \<ge> |seenL| + |seenR|” and identify seen-sets with
-  our LHS/RHS windows to import the lower bound.
-\<close>
+section \<open>0/1 integer vectors and bounded sums\<close>
 
 text \<open>
-  \<open>bitvec k\<close> = all 0/1 lists of length k over integers (not booleans).
-  This lets us use integer arithmetic directly in the subset-sum objectives.
-
-  Frequently used facts:
-    • \<open>finite_bitvec\<close>, \<open>card_bitvec\<close> = 2^k
-    • Suc-decomposition lemmas split \<open>bitvec (Suc n)\<close> by the head bit.
+  We represent selections by 0/1 integer vectors of a fixed length.
+  For a list @{term "as :: int list"} and a 0/1 vector @{term "xs :: int list"},
+  the subset-sum value is the dot product restricted to a set of indices.
 \<close>
 
+(* A bitvector of length k is a list of k elements from {0,1} *)
 definition bitvec :: "nat \<Rightarrow> int list set" where
   "bitvec k = {xs. length xs = k \<and> set xs \<subseteq> {0::int, 1}}"
 
+(* Basic lemmas about bitvectors: cardinality, finiteness, etc. *)
 lemma bitvec_0[simp]: "bitvec 0 = {[]}"
   unfolding bitvec_def by auto
 
 lemma sum_pow2_int: "(\<Sum> i<k. (2::int)^i) = 2^k - 1"
   by (induction k) simp_all
 
+(* Bitvectors of length n+1 are exactly {0::xs} \<union> {1::xs} where xs has length n *)
 lemma bitvec_Suc_partition:
   "bitvec (Suc n) =
      {0 # xs | xs. xs \<in> bitvec n} \<union> {1 # xs | xs. xs \<in> bitvec n}"
@@ -136,10 +52,12 @@ next
   qed
 qed
 
+(* The two halves of the partition are disjoint *)
 lemma bitvec_Suc_disjoint:
   "{0 # xs | xs. xs \<in> bitvec n} \<inter> {1 # xs | xs. xs \<in> bitvec n} = {}"
   by auto
 
+(* There are exactly 2^n bitvectors of length n *)
 lemma finite_bitvec[simp]: "finite (bitvec n)"
 proof (induction n)
   case 0
@@ -183,70 +101,69 @@ next
   finally show ?case .
 qed
 
-text \<open>
-  Restricted sums and the pivot split.
+(* ========================================================================= *)
+(* PART 2: The Split Function e_k and LHS/RHS Sets                          *)
+(* ========================================================================= *)
 
-  • \<open>sum_as_on as I xs\<close> = weighted sum over indices I.
-  • \<open>lhs_of as k xs\<close>    = prefix sum over \<open>{0..<k}\<close>.
-  • \<open>rhs_of as k s xs\<close>  = the value that the suffix must realize so that the full sum
-                          equals s: namely \<open>s − \<Sum>_{i\<in>{k..<length as}} as!i * xs!i\<close>.
-  • \<open>e_k as s k xs\<close>     = pair \<open>(lhs, rhs)\<close> extracted from a single 0/1 selection.
-
-  Later we form value-sets
-    \<open>LHS (e_k as s k) n\<close> = { lhs_of \<dots> | xs \<in> bitvec n }
-    \<open>RHS (e_k as s k) n\<close> = { rhs_of \<dots> | xs \<in> bitvec n }
-  and count them under “distinct subset sums”.
-\<close>
-
+(* Sum of as[i] * xs[i] over index set I *)
 definition sum_as_on :: "int list \<Rightarrow> nat set \<Rightarrow> int list \<Rightarrow> int" where
   "sum_as_on as I xs = (\<Sum> i \<in> I. as ! i * xs ! i)"
 
+(* Left-hand side: sum over first k indices *)
 definition lhs_of :: "int list \<Rightarrow> nat \<Rightarrow> int list \<Rightarrow> int" where
   "lhs_of as k xs = sum_as_on as {0..<k} xs"
 
+(* Right-hand side: target s minus sum over indices k..n *)
 definition rhs_of :: "int list \<Rightarrow> nat \<Rightarrow> int \<Rightarrow> int list \<Rightarrow> int" where
   "rhs_of as k s xs = s - sum_as_on as {k..<length as} xs"
 
+(* THE KEY SPLIT FUNCTION:
+   e_k maps each bitvector xs to a pair (L, R) where:
+   - L is the sum of the first k weights times their selections
+   - R is what remains of the target after subtracting the last (n-k) weights
+   
+   This splits the subset-sum problem into two independent subproblems! *)
 definition e_k :: "int list \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> int list \<Rightarrow> int \<times> int" where
   "e_k as s k xs = (lhs_of as k xs, rhs_of as k s xs)"
 
+(* LHS: the set of all possible left-hand-side values *)
 definition LHS :: "(int list \<Rightarrow> int \<times> int) \<Rightarrow> nat \<Rightarrow> int set" where
   "LHS e n = {fst (e xs) | xs. xs \<in> bitvec n}"
 
+(* RHS: the set of all possible right-hand-side values *)
 definition RHS :: "(int list \<Rightarrow> int \<times> int) \<Rightarrow> nat \<Rightarrow> int set" where
   "RHS e n = {snd (e xs) | xs. xs \<in> bitvec n}"
 
-text \<open>
-  Distinct-subset-sums property:
-  different 0/1 vectors of length \<open>length as\<close> yield different full sums
-    \<open>\<Sum> i<length as. as!i * xs!i\<close>.
+(* ========================================================================= *)
+(* PART 3: Distinct Subset Sums Property                                    *)
+(* ========================================================================= *)
 
-  This is the injectivity hypothesis used to show large LHS/RHS images.
-  The canonical example we use later is \<open>as = map (\<lambda>i. 2^i) [0..<n]\<close>.
+section \<open>Distinct-subset-sums (full length)\<close>
+
+text \<open>
+  CRITICAL PROPERTY: A weight list has "distinct subset sums" if different
+  0/1 selections always produce different total sums. This is key because
+  it makes the split function e_k INJECTIVE on both halves.
+\<close>
+
+text \<open>
+  Distinct subset sums: different 0/1 n-vectors yield different total sums.
 \<close>
 definition distinct_subset_sums :: "int list \<Rightarrow> bool" where
   "distinct_subset_sums as \<equiv>
      (\<forall>xs\<in>bitvec (length as). \<forall>ys\<in>bitvec (length as).
         xs \<noteq> ys \<longrightarrow> (\<Sum> i < length as. as ! i * xs ! i) \<noteq> (\<Sum> i < length as. as ! i * ys ! i))"
 
-text \<open>
-  Padding & splitting toolkit (prefix/suffix technology).
+(* ========================================================================= *)
+(* PART 4: Padding Lemmas (Technical Machinery)                             *)
+(* ========================================================================= *)
 
-  Goal: reduce any statement about a length-\<open>n\<close> vector to a statement about a
-  length-\<open>k\<close> prefix (resp. \<open>n−k\<close> suffix) plus zero padding, so that we can
-  (i) push sums to the prefix or suffix and (ii) reindex suffix binders to \<open>{0..<n−k}\<close>.
+section \<open>Padding lemmas for prefix/suffix reasoning\<close>
 
-  Typical flow:
-    xs \<in> bitvec n
-    p  = take k xs   (p \<in> bitvec k),     pad tail with 0s
-    q  = drop k xs   (q \<in> bitvec (n−k)), pad head with 0s
-    reindex \<open>{k..<n}\<close> \<leftrightarrow> \<open>{0..<n−k}\<close> using \<open>sum_reindex_add\<close>.
-
-  These lemmas are used in the LHS/RHS cardinality proofs to show:
-    LHS = f  ` bitvec k   with f injective
-    RHS = g  ` bitvec (n−k) with g injective
-\<close>
-
+(* These lemmas let us extend/restrict bitvectors with zeros while preserving
+   the prefix or suffix properties we care about. Used to show that:
+   - LHS values come from first k positions (pad with zeros after)
+   - RHS values come from last (n-k) positions (pad with zeros before) *)
 lemma pad_suffix_zeros_in_bitvec:
   assumes "p \<in> bitvec k" "n \<ge> k"
   shows "p @ replicate (n - k) 0 \<in> bitvec n"
@@ -351,21 +268,11 @@ proof -
   ultimately show ?thesis by simp
 qed
 
-text \<open>
-  Counting images under distinctness.
+(* ========================================================================= *)
+(* PART 5: THE MAIN COUNTING THEOREMS (Lemma 2)                            *)
+(* ========================================================================= *)
 
-  For fixed \<open>as, s, n, k\<close> with \<open>k \<le> n\<close> and \<open>distinct_subset_sums as\<close>:
-    • Every LHS value comes from a *unique* prefix p \<in> bitvec k
-      (tail padded with zeros) \<Rightarrow> \<open>card LHS = 2^k\<close>.
-    • Every RHS value comes from a *unique* suffix q \<in> bitvec (n−k)
-      (head padded with zeros) \<Rightarrow> \<open>card RHS = 2^(n−k)\<close>.
-
-  The key step is using distinctness on *padded* vectors of length n.
-  We collect the product identity:
-
-    lemma2_split:  card LHS * card RHS = 2^n.
-\<close>
-
+(* THEOREM: If weights have distinct subset sums, then |LHS| = 2^k *)
 lemma card_LHS_e_k:
   fixes as :: "int list" and s :: int and n k :: nat
   assumes n_def: "n = length as" and k_le: "k \<le> n"
@@ -482,6 +389,7 @@ proof -
   finally show ?thesis .
 qed
 
+(* THEOREM: If weights have distinct subset sums, then |RHS| = 2^(n-k) *)
 lemma card_RHS_e_k:
   fixes as :: "int list" and s :: int and n k :: nat
   assumes n_def: "n = length as" and k_le: "k \<le> n"
@@ -619,6 +527,7 @@ proof -
   finally show ?thesis .
 qed
 
+(* COROLLARY: The product |LHS| \<times> |RHS| = 2^n *)
 theorem lemma2_split:
   fixes as :: "int list" and s :: int and n k :: nat
   assumes n_def: "n = length as" and k_le: "k \<le> n"
@@ -634,15 +543,11 @@ proof -
     by (simp add: power_add[symmetric] kn)
 qed
 
-text \<open>
-  From product to sum via AM–GM.
+(* ========================================================================= *)
+(* PART 6: AM-GM Lower Bound (Lemma 3)                                      *)
+(* ========================================================================= *)
 
-  If \<open>A = card LHS\<close> and \<open>B = card RHS\<close> then \<open>A * B = 2^n\<close>, hence by AM–GM we obtain
-    \<open>A + B \<ge> 2 * sqrt (2^n)\<close>.
-  We package that as \<open>lhs_rhs_sum_lower_bound\<close>, which is the quantitative driver
-  we will feed into “steps \<ge> |seenL| + |seenR|”.
-\<close>
-
+(* THEOREM: If A \<times> B \<ge> 2^n, then A + B \<ge> 2\<surd>(2^n) by AM-GM inequality *)
 lemma lemma3_AFP:
   fixes A B :: real and n :: nat
   assumes A0: "A \<ge> 0" and B0: "B \<ge> 0"
@@ -659,6 +564,7 @@ proof -
   with amgm show ?thesis by linarith
 qed
 
+(* COROLLARY: For distinct subset sums, |LHS| + |RHS| \<ge> 2\<surd>(2^n) *)
 corollary lhs_rhs_sum_lower_bound:
   fixes as :: "int list" and s :: int and n k :: nat
   assumes n_def: "n = length as" and k_le: "k \<le> n" and distinct: "distinct_subset_sums as"
@@ -689,34 +595,26 @@ proof -
   by simp
 qed
 
-text \<open>
-  Abstract decision-tree reader.
+(* ========================================================================= *)
+(* PART 7: Decision Tree Model (Lemma 1 Framework)                          *)
+(* ========================================================================= *)
 
-  • The tree alternately asks left indices \<open>iL\<close> (constructor \<open>AskL\<close>) or right indices
-    \<open>iR\<close> (constructor \<open>AskR\<close>) and branches on oracle answers \<open>oL i\<close> / \<open>oR j\<close>.
-  • \<open>run oL oR T\<close> evaluates the tree to a boolean.
-  • \<open>seenL_run\<close> and \<open>seenR_run\<close> are the *sets of queried indices along the taken path*.
-  • \<open>steps_run\<close> is the path length (number of queries).
+section \<open>Decision-tree reader model and coverage (Lemma 1)\<close>
 
-  We also define a well-formedness predicate \<open>wf_dtr L R T\<close> stating that the tree
-  only asks indices from declared sets \<open>L\<close> and \<open>R\<close>, and prove:
-
-    – If two oracles agree on all indices seen along the path, the run result and
-      seen-sets are equal (agree-on-seen principle).
-    – \<open>card (seenL_run) \<le> steps\<close> and \<open>card (seenR_run) \<le> steps\<close>, hence
-      \<open>steps \<ge> |seenL| + |seenR|\<close>.
-\<close>
-
+(* A decision tree that can query left-oracle at indices iL and 
+   right-oracle at indices iR *)
 datatype ('iL,'iR) dtr =
     Leaf bool
   | AskL 'iL "('iL,'iR) dtr" "('iL,'iR) dtr"
   | AskR 'iR "('iL,'iR) dtr" "('iL,'iR) dtr"
 
+(* Run the tree with two oracles oL and oR *)
 fun run :: "('iL \<Rightarrow> bool) \<Rightarrow> ('iR \<Rightarrow> bool) \<Rightarrow> ('iL,'iR) dtr \<Rightarrow> bool" where
   "run oL oR (Leaf b) = b"
 | "run oL oR (AskL i t0 t1) = run oL oR (if oL i then t1 else t0)"
 | "run oL oR (AskR j t0 t1) = run oL oR (if oR j then t1 else t0)"
 
+(* Track which left-indices were queried during the run *)
 fun seenL_run :: "('iL \<Rightarrow> bool) \<Rightarrow> ('iR \<Rightarrow> bool) \<Rightarrow> ('iL,'iR) dtr \<Rightarrow> 'iL set" where
   "seenL_run oL oR (Leaf b) = {}"
 | "seenL_run oL oR (AskL i t0 t1) =
@@ -724,6 +622,7 @@ fun seenL_run :: "('iL \<Rightarrow> bool) \<Rightarrow> ('iR \<Rightarrow> bool
 | "seenL_run oL oR (AskR j t0 t1) =
      seenL_run oL oR (if oR j then t1 else t0)"
 
+(* Track which right-indices were queried *)
 fun seenR_run :: "('iL \<Rightarrow> bool) \<Rightarrow> ('iR \<Rightarrow> bool) \<Rightarrow> ('iL,'iR) dtr \<Rightarrow> 'iR set" where
   "seenR_run oL oR (Leaf b) = {}"
 | "seenR_run oL oR (AskL i t0 t1) =
@@ -731,6 +630,7 @@ fun seenR_run :: "('iL \<Rightarrow> bool) \<Rightarrow> ('iR \<Rightarrow> bool
 | "seenR_run oL oR (AskR j t0 t1) =
      insert j (seenR_run oL oR (if oR j then t1 else t0))"
 
+(* Count the number of queries made *)
 fun steps_run :: "('iL \<Rightarrow> bool) \<Rightarrow> ('iR \<Rightarrow> bool) \<Rightarrow> ('iL,'iR) dtr \<Rightarrow> nat" where
   "steps_run oL oR (Leaf b) = 0"
 | "steps_run oL oR (AskL i t0 t1) =
@@ -738,6 +638,7 @@ fun steps_run :: "('iL \<Rightarrow> bool) \<Rightarrow> ('iR \<Rightarrow> bool
 | "steps_run oL oR (AskR j t0 t1) =
      Suc (steps_run oL oR (if oR j then t1 else t0))"
 
+(* Well-formedness: tree only queries from declared index sets *)
 text \<open>Well-formedness: the tree only queries declared L/R indices.\<close>
 inductive wf_dtr :: "'iL set \<Rightarrow> 'iR set \<Rightarrow> ('iL,'iR) dtr \<Rightarrow> bool" where
   Leaf[intro!]:  "wf_dtr L R (Leaf b)"
@@ -769,7 +670,15 @@ lemma seenL_eq_AskR:
   "seenL_run oL oR (if oR j then t1 else t0) = seenL_run oL oR (AskR j t0 t1)"
   by (cases "oR j") auto
 
-text \<open>Agreeing on all indices seen along the path \<Rightarrow> same path/result/seen-sets.\<close>
+(* evaluation/seen simplifiers *)
+lemmas run_simps   = run.simps
+lemmas seenL_simps = seenL_run.simps
+lemmas seenR_simps = seenR_run.simps
+
+lemma run_Leaf[simp]:  "run oL oR (Leaf b) = b" by simp
+lemma seenL_Leaf[simp]: "seenL_run oL oR (Leaf b) = {}" by simp
+lemma seenR_Leaf[simp]: "seenR_run oL oR (Leaf b) = {}" by simp
+
 lemma run_seen_agree_on_triple:
   assumes L: "\<And>i. i \<in> seenL_run oL oR T \<Longrightarrow> oL' i = oL i"
       and R: "\<And>j. j \<in> seenR_run oL oR T \<Longrightarrow> oR' j = oR j"
@@ -908,6 +817,8 @@ next
     using eq_j rec_if by auto
 qed
 
+(* KEY LEMMA: If two oracles agree on all queried indices, they get 
+   the same result and query the same indices *)
 lemma run_agree_on_seen:
   assumes L: "\<And>i. i \<in> seenL_run oL oR T \<Longrightarrow> oL' i = oL i"
       and R: "\<And>j. j \<in> seenR_run oL oR T \<Longrightarrow> oR' j = oR j"
@@ -922,6 +833,7 @@ proof -
     and "seenL_run oL oR T = seenL_run oL' oR' T"
     and "seenR_run oL oR T = seenR_run oL' oR' T" by auto
 qed
+ (* This is the "unread-agreement" property! *)
 
 (* single-path seen-sets are finite *)
 lemma finite_seenL_run[simp]: "finite (seenL_run oL oR T)"
@@ -998,8 +910,23 @@ next
   finally show ?case .
 qed
 
+(* Number of queries bounds the number of distinct indices seen *)
 lemma steps_ge_sum_seen:
   "steps_run oL oR T \<ge> card (seenL_run oL oR T) + card (seenR_run oL oR T)"
+  (* Each query step either queries a new index or re-queries an old one *)
+
+(* ========================================================================= *)
+(* PART 8: The Coverage Theorem (Lemma 1)                                   *)
+(* ========================================================================= *)
+
+text \<open>THE ADVERSARIAL ARGUMENT:
+  
+  If we have a tree T that computes a boolean function "good(oL, oR)" correctly,
+  and flipping ANY unread index would change the answer, then ALL indices must
+  have been read.
+  
+  This is the heart of Lemma 1!
+\<close>
 proof (induction T arbitrary: oL oR)
   case (Leaf b) show ?case by simp
 next
@@ -1044,55 +971,25 @@ next
   finally show ?case .
 qed
 
-text \<open>
-  Canonical distinct family: powers of two.
-
-  We instantiate the weights as \<open>as = map (\<lambda>i. 2^i) [0..<n]\<close> and prove that they
-  are superincreasing (each weight exceeds the sum of all previous), which implies
-  \<open>distinct_subset_sums as\<close>. This gives “hard” instances for every n:
-
-    exists_hard: \<forall>n. \<exists>as. length as = n \<and> distinct_subset_sums as.
-\<close>
-
+(* powers-of-two as ints *)
 definition pow2_list :: "nat \<Rightarrow> int list" where
   "pow2_list n = map (\<lambda>i. (2::int)^i) [0..<n]"
 
-text \<open>
-  Coverage lemma (Lemma 1 in abstract form).
-
-  Assume:
-    • The tree is well-formed.
-    • \<open>run\<close> is *extensionally correct* for some specification \<open>good oL oR\<close>.
-    • For every left index i \<in> Lset, there is a *pointwise flip* of the left oracle
-      (changing only i) that flips the truth of \<open>good\<close>; similarly for right indices.
-
-  Then for *all* inputs (all oracles) we must have:
-    • Every left index is *seen* (otherwise flipping it would not be detected),
-    • Every right index is *seen*,
-    hence  \<open>seenL_run = Lset\<close> and \<open>seenR_run = Rset\<close> and therefore
-          \<open>steps \<ge> card Lset + card Rset\<close>.
-
-  This is the model-independent “must read everything relevant” statement.
-\<close>
+text \<open>A generic adversary/coverage locale: this abstracts Lemma 1.\<close>
 locale DecisionTree_Coverage =
-  fixes Lset :: "'iL set" and Rset :: "'iR set"
-  fixes T    :: "('iL,'iR) dtr"
-  fixes good :: "('iL \<Rightarrow> bool) \<Rightarrow> ('iR \<Rightarrow> bool) \<Rightarrow> bool"
+  fixes Lset :: "'iL set" and Rset :: "'iR set"  (* Index sets *)
+  fixes T    :: "('iL,'iR) dtr"                  (* The decision tree *)
+  fixes good :: "('iL \<Rightarrow> bool) \<Rightarrow> ('iR \<Rightarrow> bool) \<Rightarrow> bool" (* The spec *)
   assumes wf: "wf_dtr Lset Rset T"
   assumes correct: "\<forall>oL oR. run oL oR T = good oL oR"
-  (* NEW: Local guarded flip - weaker but sufficient *)
-  assumes flipL_local:
-    "\<And>oL oR i. i \<in> Lset \<Longrightarrow> i \<notin> seenL_run oL oR T \<Longrightarrow>
-     \<exists>oL' oR'. (\<forall>j \<in> seenL_run oL oR T. oL' j = oL j) \<and>
-               (\<forall>k \<in> seenR_run oL oR T. oR' k = oR k) \<and>
-               good oL' oR' \<noteq> good oL oR"
-  assumes flipR_local:
-    "\<And>oL oR j. j \<in> Rset \<Longrightarrow> j \<notin> seenR_run oL oR T \<Longrightarrow>
-     \<exists>oL' oR'. (\<forall>i \<in> seenL_run oL oR T. oL' i = oL i) \<and>
-               (\<forall>k \<in> seenR_run oL oR T. k \<noteq> j \<longrightarrow> oR' k = oR k) \<and>
-               good oL' oR' \<noteq> good oL oR"
+(* CRITICAL: Flipping any unread index would change the answer *)
+  assumes flipL_pointwise:
+    "\<And>i oL oR. i \<in> Lset \<Longrightarrow> \<exists>oL'. (\<forall>j\<noteq>i. oL' j = oL j) \<and> good oL' oR \<noteq> good oL oR"
+  assumes flipR_pointwise:
+    "\<And>j oL oR. j \<in> Rset \<Longrightarrow> \<exists>oR'. (\<forall>i\<noteq>j. oR' i = oR i) \<and> good oL oR' \<noteq> good oL oR"
 begin
 
+(* THEOREM: Every index in Lset and Rset must be queried *)
 lemma coverage_for_all_inputs:
   "\<And>oL oR. seenL_run oL oR T = Lset \<and> seenR_run oL oR T = Rset"
 proof (intro allI conjI)
@@ -1107,9 +1004,7 @@ proof (intro allI conjI)
       assume "i \<notin> seenL_run oL oR T"
       then obtain oL' where A: "\<And>j. j \<noteq> i \<Longrightarrow> oL' j = oL j"
                          and F: "good oL' oR \<noteq> good oL oR"
-        by (smt (verit, best) DecisionTree_Coverage.correct 
-            DecisionTree_Coverage_axioms flipL_local iL 
-            run_agree_on_seen(1))
+        using flipL_pointwise[OF iL] by blast
       have "\<And>j. j \<in> seenL_run oL oR T \<Longrightarrow> oL' j = oL j"
         using A \<open>i \<notin> seenL_run oL oR T\<close> by fast
       moreover have "\<And>k. k \<in> seenR_run oL oR T \<Longrightarrow> oR k = oR k" by simp
@@ -1128,7 +1023,7 @@ proof (intro allI conjI)
       assume "j \<notin> seenR_run oL oR T"
       then obtain oR' where A: "\<And>i. i \<noteq> j \<Longrightarrow> oR' i = oR i"
                          and F: "good oL oR' \<noteq> good oL oR"
-        by (smt (verit, best) correct flipR_local jR run_agree_on_seen(1))
+        using flipR_pointwise[OF jR] by blast
       have "\<And>k. k \<in> seenR_run oL oR T \<Longrightarrow> oR' k = oR k"
         using A \<open>j \<notin> seenR_run oL oR T\<close> by fast
       moreover have "\<And>i. i \<in> seenL_run oL oR T \<Longrightarrow> oL i = oL i" by simp
@@ -1142,6 +1037,7 @@ proof (intro allI conjI)
   from subL supL subR supR show "seenL_run oL oR T = Lset" "seenR_run oL oR T = Rset" by auto
 qed
 
+(* COROLLARY: Number of steps \<ge> |Lset| + |Rset| *)
 lemma steps_lower_bound_all:
   "\<And>oL oR. steps_run oL oR T \<ge> card Lset + card Rset"
 proof -
@@ -1155,30 +1051,498 @@ qed
 
 end  (* DecisionTree_Coverage *)
 
-text \<open>
-  Abstract reader interface (no machine model).
+(* ========================================================================= *)
+(* PART 9: Ruling Out Polynomial Time                                       *)
+(* ========================================================================= *)
 
-  You supply:
-    • \<open>steps as s\<close>: number of queries/steps used to decide “\<exists>xs: sum(as,xs)=s”.
-    • \<open>seenL as s k\<close> and \<open>seenR as s k\<close>: the sets of left/right indices read when
-      the reader uses pivot k.
-  Assumptions:
-    • \<open>coverage_ex\<close>: On distinct weights, there *exists* a k \<le> n such that
-      \<open>seenL = LHS (e_k \<dots>)\<close> and \<open>seenR = RHS (e_k \<dots>)\<close> — i.e. Lemma 1 instantiated.
-    • \<open>steps_lb\<close>: A general “reader cost” inequality, steps \<ge> |seenL| + |seenR|.
+(* The rest of the theory shows that if you could solve subset-sum in 
+   polynomial time for the distinct-subset-sums family, you'd violate
+   the exponential lower bound 2\<surd>(2^n) we just proved. *)
 
-  Consequences:
-    • \<open>subset_sum_sqrt_lower_bound\<close>: steps \<ge> 2\<surd>(2^n) on distinct instances.
-    • \<open>no_polytime_decider_on_distinct_family\<close>: no polynomial (in n) worst-case bound
-      exists across all distinct families.
-\<close>
+locale SubsetSum_Reader_NoK =
+  fixes steps :: "int list \<Rightarrow> int \<Rightarrow> nat"
+    and seenL :: "int list \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> int set"
+    and seenR :: "int list \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> int set"
+  assumes coverage_ex:
+    "\<And>as s. distinct_subset_sums as \<Longrightarrow> \<exists>k\<le>length as.
+       seenL as s k = LHS (e_k as s k) (length as) \<and>
+       seenR as s k = RHS (e_k as s k) (length as)"
+  assumes steps_lb:
+    "\<And>as s k. steps as s \<ge> card (seenL as s k) + card (seenR as s k)"
+begin
 
-text \<open>
-  Auxiliary summation identity and a second, compact proof of distinctness for
-  \<open>pow2_list\<close>. These are convenient local copies for later files that only need
-  the statement “pow2_list has distinct subset sums” without importing all earlier
-  lemmas.
-\<close>
+lemma lemma1_ex:
+  assumes n_def: "n = length as" and distinct: "distinct_subset_sums as"
+  shows "\<exists>k\<le>n. card (LHS (e_k as s k) n) + card (RHS (e_k as s k) n) \<le> steps as s"
+proof -
+  obtain k where k_le: "k \<le> n"
+    and covL: "seenL as s k = LHS (e_k as s k) n"
+    and covR: "seenR as s k = RHS (e_k as s k) n"
+    using coverage_ex[OF distinct] n_def by force
+  have "card (seenL as s k) + card (seenR as s k) \<le> steps as s"
+    by (rule steps_lb)
+  hence "card (LHS (e_k as s k) n) + card (RHS (e_k as s k) n) \<le> steps as s"
+    by (simp add: covL covR)
+  thus ?thesis using k_le by blast
+qed
+
+theorem subset_sum_sqrt_lower_bound:
+  fixes as :: "int list" and s :: int and n :: nat
+  assumes n_def: "n = length as" and distinct: "distinct_subset_sums as"
+  shows "2 * sqrt ((2::real) ^ n) \<le> real (steps as s)"
+proof -
+  obtain k where k_le: "k \<le> n" and base:
+    "card (LHS (e_k as s k) n) + card (RHS (e_k as s k) n) \<le> steps as s"
+    using lemma1_ex[OF n_def distinct] by blast
+  have "2 * sqrt ((2::real) ^ n)
+        \<le> real (card (LHS (e_k as s k) n) + card (RHS (e_k as s k) n))"
+    using lhs_rhs_sum_lower_bound[OF n_def k_le distinct] .
+  also have "\<dots> \<le> real (steps as s)" using base by simp
+  finally show ?thesis .
+qed
+
+end  (* SubsetSum_Reader_NoK *)
+
+locale SubsetSum_To_Polytime_NoK =
+  SubsetSum_Reader_NoK +
+  fixes enc :: "int list \<Rightarrow> int \<Rightarrow> bool list"
+assumes enc_len_poly:
+  "\<exists>(C::real)>0. \<exists>(D::nat).
+      \<forall>as s. distinct_subset_sums as \<longrightarrow>
+        real (length (enc as s)) \<le> C * (real (length as)) ^ D"
+assumes steps_poly_of_enc:
+  "\<exists>(c::real)>0. \<exists>(d::nat).
+      \<forall>as s. steps as s \<le> nat (ceiling (c * (real (length (enc as s))) ^ d))"
+begin
+
+lemma steps_poly_in_n_on_distinct:
+  shows "\<exists>(c'::real)>0. \<exists>(d'::nat).
+           \<forall>as s n. n = length as \<longrightarrow> distinct_subset_sums as \<longrightarrow>
+                    steps as s \<le> nat (ceiling (c' * (real n) ^ d'))"
+proof -
+  obtain C :: real and D :: nat
+    where Cpos: "C > 0"
+      and enc_bd:
+        "\<forall>as s. distinct_subset_sums as \<longrightarrow>
+           real (length (enc as s)) \<le> C * (real (length as)) ^ D"
+    using enc_len_poly by blast
+  obtain c :: real and d :: nat
+    where cpos: "c > 0"
+      and step_bd:
+        "\<forall>as s. steps as s \<le> nat (ceiling (c * (real (length (enc as s))) ^ d))"
+    using steps_poly_of_enc by blast
+  define c' where "c' = c * C ^ d"
+  define d' where "d' = D * d"
+  have c'pos: "c' > 0" using cpos Cpos by (simp add: c'_def)
+
+  have main:
+    "\<forall>as s n. n = length as \<longrightarrow> distinct_subset_sums as \<longrightarrow>
+       steps as s \<le> nat (ceiling (c' * (real n) ^ d'))"
+  proof (intro allI impI)
+    fix as s n assume n_def: "n = length as" and dist: "distinct_subset_sums as"
+    have step0: "steps as s \<le> nat (ceiling (c * (real (length (enc as s))) ^ d))"
+      using step_bd by blast
+    have enc_real: "real (length (enc as s)) \<le> C * (real n) ^ D"
+      using enc_bd dist n_def by simp
+    have nonneg_x: "0 \<le> real (length (enc as s))" by simp
+    have nonneg_y: "0 \<le> C * (real n) ^ D"
+      using Cpos by (intro mult_nonneg_nonneg) simp_all
+    have pow_mono:
+      "(real (length (enc as s))) ^ d \<le> (C * (real n) ^ D) ^ d"
+      by (rule power_mono) (use enc_real nonneg_x nonneg_y in auto)
+    have mult_mono:
+      "c * (real (length (enc as s))) ^ d \<le> c * (C * (real n) ^ D) ^ d"
+      using pow_mono cpos by (simp add: mult_left_mono)
+    have step1:
+      "nat (ceiling (c * (real (length (enc as s))) ^ d))
+       \<le> nat (ceiling (c * (C * (real n) ^ D) ^ d))"
+      using mult_mono by (intro nat_mono ceiling_mono) simp_all
+    from step0 step1
+    have "steps as s \<le> nat (ceiling (c * (C * (real n) ^ D) ^ d))" by linarith
+    also have "\<dots> = nat (ceiling ((c * C ^ d) * (real n) ^ (D * d)))"
+      by (simp add: power_mult_distrib mult_ac power_mult)
+    finally show "steps as s \<le> nat (ceiling (c' * (real n) ^ d'))"
+      by (simp add: c'_def d'_def)
+  qed
+  show ?thesis using c'pos main by blast
+qed
+
+lemma exp_beats_poly_ceiling_strict:
+  fixes c :: real and d :: nat
+  assumes cpos: "c > 0"
+  shows "\<exists>N::nat. \<forall>n\<ge>N.
+           of_int (ceiling (c * (real n) ^ d)) < 2 * sqrt ((2::real) ^ n)"
+proof -
+  (* Eventually: c * n^d \<le> (\<surd>2)^n *)
+  have ev: "eventually (\<lambda>n. c * (real n) ^ d \<le> (sqrt 2) ^ n) at_top"
+    by real_asymp
+  then obtain N1 where N1: "\<forall>n\<ge>N1. c * (real n) ^ d \<le> (sqrt 2) ^ n"
+    by (auto simp: eventually_at_top_linorder)
+  define N where "N = max N1 1"
+
+  have ceil_le: "of_int (ceiling y) \<le> y + 1" for y :: real by linarith
+  show ?thesis
+  proof (rule exI[of _ N], intro allI impI)
+    fix n assume nN: "n \<ge> N"
+    hence nN1: "n \<ge> N1" and n_ge1: "n \<ge> 1" by (auto simp: N_def)
+    from N1 nN1 have bound: "c * (real n) ^ d \<le> (sqrt 2) ^ n" by simp
+    have up: "of_int (ceiling (c * (real n) ^ d)) \<le> (sqrt 2) ^ n + 1"
+      using ceil_le bound by linarith
+    have step: "(sqrt 2) ^ n + 1 < 2 * (sqrt 2) ^ n"
+      using n_ge1 by auto
+    have "2 * sqrt ((2::real) ^ n) = 2 * (sqrt 2) ^ n"
+      by (simp add: real_sqrt_power)
+    from up step have L: "of_int (ceiling (c * (real n) ^ d)) < 2 * (sqrt 2) ^ n"
+      by linarith
+    have "2 * sqrt ((2::real) ^ n) = 2 * (sqrt 2) ^ n"
+      by (simp add: real_sqrt_power)
+    with L show "of_int (ceiling (c * (real n) ^ d)) < 2 * sqrt ((2::real) ^ n)" by simp
+  qed
+qed
+
+lemma nth_pow2_list:
+  assumes "i < n"
+  shows "pow2_list n ! i = (2::int)^i"
+  using assms by (simp add: pow2_list_def nth_map_upt)
+
+lemma sum_prefix_pow2_list:
+  assumes "k \<le> n"
+  shows "(\<Sum> i<k. pow2_list n ! i) = (\<Sum> i<k. (2::int)^i)"
+  using assms by (simp add: nth_pow2_list)
+
+lemma pow2_gt_sum_prev_int:
+  fixes k :: nat
+  shows "(\<Sum> i<k. (2::int)^i) < 2^k"
+proof (induction k)
+  case 0
+  show ?case by simp
+next
+  case (Suc k)
+  have "(\<Sum> i<Suc k. (2::int)^i) = (\<Sum> i<k. 2^i) + 2^k" by simp
+  also have "\<dots> < 2^k + 2^k"
+    using Suc.IH by (intro add_strict_right_mono)   (* int version *)
+  also have "\<dots> = 2^(Suc k)" by simp
+  finally show ?case .
+qed
+
+(* split a {..<n} sum at index k *)
+lemma sum_split_at:
+  fixes f :: "nat \<Rightarrow> 'a::comm_monoid_add"
+  assumes "k < n"
+  shows "sum f {..<n} = sum f {..<k} + f k + sum f {k+1..<n}"
+proof -
+(* split {..<n} into {..<k} ⪯ {k..<n} *)
+  have part: "{..<n} = {..<k} \<union> {k..<n}"
+    using \<open>k < n\<close> by auto
+  have step1: "sum f {..<n} = sum f {..<k} + sum f {k..<n}"
+    by (metis Un_upper1 lessThan_atLeast0 lessThan_subset_iff less_eq_nat.simps(1) 
+        part sum.atLeastLessThan_concat)
+
+(* peel k from {k..<n} *)
+  have step2set: "{k..<n} = insert k {Suc k..<n}"
+    by (metis Suc_leD assms atLeastLessThan_empty atLeastLessThan_empty_iff 
+        atLeastLessThan_singleton insert_is_Un ivl_disj_un_two(3) not_less_eq_eq)
+  have step2: "sum f {k..<n} = f k + sum f {Suc k..<n}"
+    by (subst step2set) simp
+
+(* combine *)
+  have "sum f {..<n} = sum f {..<k} + f k + sum f {k+1..<n}"
+    using step1 step2 by (metis Suc_eq_plus1 add.assoc)
+  show ?thesis
+    using \<open>sum f {..<n} = sum f {..<k} + f k + sum f {k + 1..<n}\<close> by blast
+qed
+
+(* triangle inequality for sums over {..<k} *)
+lemma abs_sum_le_sum_abs_upto:
+  shows "abs (\<Sum> i<k. (f i::int)) \<le> (\<Sum> i<k. abs (f i))"
+  by (rule sum_abs)
+
+lemma length_pow2_list[simp]: "length (pow2_list n) = n"
+  by (simp add: pow2_list_def)
+
+(* handy nth fact over a mapped [0..<n] *)
+lemma nth_map_upt:
+  assumes "k < n"
+  shows "(map f [0..<n]) ! k = f k"
+  using assms by simp
+
+lemma pow2_list_nth:
+  assumes "k < n"
+  shows "pow2_list n ! k = (2::int)^k"
+  using assms by (simp add: pow2_list_def nth_map_upt)
+
+(* the superincreasing property you want *)
+lemma pow2_superincreasing:
+  assumes "k < n"
+  shows "pow2_list n ! k > (\<Sum> i<k. pow2_list n ! i)"
+proof -
+  have A: "pow2_list n ! k = (2::int)^k"
+    using assms by (simp add: pow2_list_def nth_map_upt)
+  have B: "(\<Sum> i<k. pow2_list n ! i) = (\<Sum> i<k. (2::int)^i)"
+    using assms by (simp add: sum_prefix_pow2_list)
+  show ?thesis
+    by (simp add: A B pow2_gt_sum_prev_int)
+qed
+
+lemma diff_of_bits:
+  fixes x y :: int
+  assumes "x \<in> {0,1}" "y \<in> {0,1}" "x \<noteq> y"
+  shows "x - y = 1 \<or> x - y = -1"
+  using assms by auto
+
+lemma distinct_subset_sums_pow2:
+  fixes n :: nat
+  defines "as \<equiv> pow2_list n"
+  shows "distinct_subset_sums as"
+proof -
+  have len: "length as = n" by (simp add: as_def)
+  have A: "\<And>xs. xs \<in> bitvec n \<Longrightarrow> set xs \<subseteq> {0,1}" by (simp add: bitvec_def)
+  have B: "\<And>xs. xs \<in> bitvec n \<Longrightarrow> length xs = n" by (simp add: bitvec_def)
+
+  have super: "\<And>k. k<n \<Longrightarrow> as ! k > (\<Sum> i<k. as ! i)"
+  proof -
+    fix k assume "k<n"
+    have "as ! k = 2^k"
+      using \<open>k<n\<close> len by (simp add: as_def pow2_list_def nth_map_upt)
+    moreover have "(\<Sum> i<k. as ! i) = (\<Sum> i<k. 2^i)"
+      by (simp add: \<open>k < n\<close> assms less_imp_le_nat sum_prefix_pow2_list)
+    ultimately show "as ! k > (\<Sum> i<k. as ! i)"
+      using pow2_gt_sum_prev_int by presburger
+  qed
+
+  (* superincreasing \<Rightarrow> uniqueness of 0/1-sum representation *)
+  have uniq:
+    "\<And>xs ys. xs \<in> bitvec n \<Longrightarrow> ys \<in> bitvec n \<Longrightarrow>
+             (\<Sum> i<n. as ! i * xs ! i) = (\<Sum> i<n. as ! i * ys ! i) \<Longrightarrow> xs = ys"
+  proof -
+    fix xs ys assume X: "xs \<in> bitvec n" and Y: "ys \<in> bitvec n"
+    and EQ: "(\<Sum> i<n. as ! i * xs ! i) = (\<Sum> i<n. as ! i * ys ! i)"
+    show "xs = ys"
+    proof (rule ccontr)
+      assume "xs \<noteq> ys"
+      let ?D = "{i. i<n \<and> xs ! i \<noteq> ys ! i}"
+      have fin: "finite ?D" by simp
+      have ne: "?D \<noteq> {}"
+      proof
+        assume "?D = {}"
+        hence "\<forall>i<n. xs ! i = ys ! i" by auto
+        with B[OF X] B[OF Y] have "xs = ys" by (intro nth_equalityI) auto
+        with \<open>xs \<noteq> ys\<close> show False by contradiction
+      qed
+      define k where "k = Max ?D"
+      have kD: "k \<in> ?D" using Max_eq_iff fin k_def ne by blast
+      hence kn: "k<n" and diff: "xs ! k \<noteq> ys ! k" by auto
+
+      have zero_above:
+        "\<forall>i. k<i \<and> i<n \<longrightarrow> xs ! i = ys ! i"
+        using Max_less_iff fin k_def by blast
+
+      have len_xs: "length xs = n"     using X by (auto simp: bitvec_def)
+      have xs01_set: "set xs \<subseteq> {0,1}" using X by (auto simp: bitvec_def)
+
+      have len_ys: "length ys = n"     using Y by (auto simp: bitvec_def)
+      have ys01_set: "set ys \<subseteq> {0,1}" using Y by (auto simp: bitvec_def)
+
+      have xk01: "xs ! k \<in> {0,1}"
+        by (metis kn len_xs nth_mem subsetD xs01_set)
+      have yk01: "ys ! k \<in> {0,1}"
+        by (metis kn len_ys nth_mem subsetD ys01_set)
+
+(* you must have chosen k so that xs ! k \<noteq> ys ! k *)
+      have xy_ne: "xs ! k \<noteq> ys ! k" by (simp add: diff)
+  (* e.g. if k is a (max/first) index of difference, or from a premise *)
+
+      have bits: "xs ! k - ys ! k = 1 \<or> xs ! k - ys ! k = -1"
+        by (rule diff_of_bits[OF xk01 yk01 xy_ne])
+
+     have tail_bound:
+       "abs (\<Sum> i<k. as ! i * (xs ! i - ys ! i)) \<le> (\<Sum> i<k. abs (as ! i))"
+     proof -
+       have step_i: "\<And>i. i < k \<Longrightarrow> abs (as ! i * (xs ! i - ys ! i)) \<le> abs (as ! i)"
+       proof -
+         fix i assume ik: "i < k"
+         hence in_n: "i < n" using kn by simp
+         have xs01i: "xs ! i \<in> {0,1}" by (metis in_n len_xs nth_mem subsetD xs01_set)
+         have ys01i: "ys ! i \<in> {0,1}" by (metis in_n len_ys nth_mem subsetD ys01_set)
+         have diff_le1: "abs (xs ! i - ys ! i) \<le> (1::int)"
+           using xs01i ys01i by fastforce
+         have "abs (as ! i * (xs ! i - ys ! i)) = abs (as ! i) * abs (xs ! i - ys ! i)"
+           by (simp add: abs_mult)
+         also have "\<dots> \<le> abs (as ! i) * 1"
+           using diff_le1 by (intro mult_left_mono) simp_all
+         finally show "abs (as ! i * (xs ! i - ys ! i)) \<le> abs (as ! i)" by simp
+       qed
+       have A: "abs (\<Sum> i<k. as ! i * (xs ! i - ys ! i))
+           \<le> (\<Sum> i<k. abs (as ! i * (xs ! i - ys ! i)))"
+         by simp
+       have B: "(\<Sum> i<k. abs (as ! i * (xs ! i - ys ! i))) \<le> (\<Sum> i<k. abs (as ! i))"
+         using step_i by (intro sum_mono; simp)
+       from A B show ?thesis by linarith
+     qed
+
+(* From EQ: the two totals are equal *)
+     have diff_sum:
+       "0 = (\<Sum> i<n. as ! i * (xs ! i - ys ! i))"
+       using EQ by (simp add: sum_subtractf algebra_simps)
+
+(* Split the sum at k *)
+     have split_k:
+       "(\<Sum> i<n. as ! i * (xs ! i - ys ! i))
+        = (\<Sum> i<k. as ! i * (xs ! i - ys ! i))
+        + as ! k * (xs ! k - ys ! k)
+        + (\<Sum> i\<in>{k+1..<n}. as ! i * (xs ! i - ys ! i))"
+     using kn sum_split_at by blast
+
+(* The tail after k is zero because xs and ys agree there *)
+     have tail_zero:
+       "(\<Sum> i\<in>{k+1..<n}. as ! i * (xs ! i - ys ! i)) = 0"
+       by (rule sum.neutral) (auto simp: zero_above)
+
+     from diff_sum split_k tail_zero
+     have "0 = as ! k * (xs ! k - ys ! k)
+           + (\<Sum> i<k. as ! i * (xs ! i - ys ! i))"
+       by simp
+     hence "abs (as ! k * (xs ! k - ys ! k))
+            = abs (\<Sum> i<k. as ! i * (xs ! i - ys ! i))"
+       by simp
+(* entries of as are nonnegative (here as = pow2_list n) *)
+     have as_nonneg: "\<And>i. i < n \<Longrightarrow> 0 \<le> as ! i"
+       by (simp add: as_def pow2_list_def nth_map_upt)
+
+(* turn \<Sum> |as!i| into \<Sum> as!i on {..<k} *)
+    have drop_abs_sum:
+      "(\<Sum> i<k. abs (as ! i)) = sum ((!) as) {..<k}"
+    proof (rule sum.cong[OF refl])
+      fix i assume "i \<in> {..<k}"
+      then have "i < k" by simp
+      with kn have "i < n" by simp
+      hence "abs (as ! i) = as ! i"
+        by (simp add: as_nonneg)
+      thus "abs (as ! i) = (!) as i" by simp
+    qed
+      have "abs (as ! k * (xs ! k - ys ! k))
+            = abs (\<Sum> i<k. as ! i * (xs ! i - ys ! i))"
+        using \<open>0 = as ! k * (xs ! k - ys ! k) + (\<Sum> i<k. as ! i * (xs ! i - ys ! i))\<close>
+        by simp
+      also have "\<dots> \<le> (\<Sum> i<k. abs (as ! i))"
+        using tail_bound by simp
+      also have "\<dots> = sum ((!) as) {..<k}"
+        by (rule drop_abs_sum)
+      finally have "abs (as ! k * (xs ! k - ys ! k)) \<le> sum ((!) as) {..<k}" .
+      then have "as ! k \<le> (\<Sum> i<k. as ! i)"
+        using bits by auto
+      with super[OF kn] show False by simp
+    qed
+  qed
+ show ?thesis
+    unfolding distinct_subset_sums_def
+    using len
+    by (intro ballI; clarify) (metis uniq)
+qed
+
+lemma exists_hard:
+  "\<forall>n. \<exists>as. length as = n \<and> distinct_subset_sums as"
+proof
+  fix n
+  show "\<exists>as. length as = n \<and> distinct_subset_sums as"
+    by (intro exI[of _ "pow2_list n"])
+       (simp add: distinct_subset_sums_pow2)
+qed
+
+theorem no_polytime_decider_on_distinct_family:
+  shows "\<not> (\<exists>(c::real)>0. \<exists>(d::nat).
+             \<forall>as s. distinct_subset_sums as \<longrightarrow>
+               steps as s \<le> nat (ceiling (c * (real (length as)) ^ d)))"
+proof
+  assume ex: "\<exists>(c::real)>0. \<exists>(d::nat).
+                \<forall>as s. distinct_subset_sums as \<longrightarrow>
+                  steps as s \<le> nat (ceiling (c * (real (length as)) ^ d))"
+
+  obtain c d where
+    cpos: "c > 0" and
+    poly_n: "\<forall>as s. distinct_subset_sums as \<longrightarrow>
+                  steps as s \<le> nat (ceiling (c * (real (length as)) ^ d))"
+    using ex by blast
+
+  obtain N::nat where N:
+    "\<forall>n\<ge>N. 2 * sqrt ((2::real) ^ n) > of_int (ceiling (c * (real n) ^ d))"
+    using exp_beats_poly_ceiling_strict[OF cpos] by blast
+
+  define n :: nat where "n = N"
+  have n_ge: "n \<ge> N" by (simp add: n_def)
+
+  obtain as where nlen: "length as = n" and dist: "distinct_subset_sums as"
+    using exists_hard by blast
+
+  have lb: "2 * sqrt ((2::real) ^ n) \<le> real (steps as s)"
+    using subset_sum_sqrt_lower_bound[OF nlen[symmetric] dist] .
+
+  have poly_n_as: "\<forall>s. steps as s \<le> nat (ceiling (c * (real (length as)) ^ d))"
+    using poly_n dist by blast
+  have ub_nat: "steps as s \<le> nat (ceiling (c * (real n) ^ d))"
+    using poly_n_as by (simp add: nlen)
+
+  have nonneg: "0 \<le> c * (real n) ^ d" using cpos by simp
+  have ceil_ge0: "0 \<le> ceiling (c * (real n) ^ d)" using nonneg by simp
+  have conv: "real (nat (ceiling (c * (real n) ^ d))) = of_int (ceiling (c * (real n) ^ d))"
+    using ceil_ge0 by simp
+  have ub: "real (steps as s) \<le> of_int (ceiling (c * (real n) ^ d))"
+    using ub_nat conv by simp
+
+  from N n_ge have strict:
+    "2 * sqrt ((2::real) ^ n) > of_int (ceiling (c * (real n) ^ d))" by blast
+  from lb ub strict show False by linarith
+qed
+end
+
+section \<open>Cook–Levin: conclude SUBSET-SUM \<notin> P (conditional on the bridge)\<close>
+
+context SubsetSum_To_Polytime_NoK
+begin
+
+context
+  fixes E :: "int list \<Rightarrow> int \<Rightarrow> bool list"
+  assumes E_len_overhead:
+    "\<exists>A B. \<forall>as s. length (E as s) \<le> A * length (enc as s) + B"
+begin
+
+definition SUBSET_SUM_CL :: "bool list set" where
+  "SUBSET_SUM_CL =
+     { E as s | as s.
+         (\<exists>xs\<in>bitvec (length as). (\<Sum> i < length as. as ! i * xs ! i) = s) }"
+
+theorem subset_sum_not_in_P_CL:
+  shows "SUBSET_SUM_CL \<notin> P"
+proof
+  assume Pin: "SUBSET_SUM_CL \<in> P"
+
+  (* From membership in P, get a poly bound in the encoding length. *)
+  from Pin obtain c d where cpos: "c > 0"
+    and enc_steps:
+      "\<forall>as s. steps as s \<le> nat (ceiling (c * (real (length (enc as s))) ^ d))"
+    using steps_poly_of_enc by blast
+
+  (* Turn “poly in |enc|” into “poly in n = length as” on DISTINCT instances. *)
+  from steps_poly_in_n_on_distinct
+  obtain c' d' where c'pos: "c' > 0"
+    and poly_n:
+      "\<forall>as s n. n = length as \<longrightarrow> distinct_subset_sums as \<longrightarrow>
+                 steps as s \<le> nat (ceiling (c' * (real n) ^ d'))"
+    by blast
+
+  (* Package it in the exact shape that the impossibility theorem forbids. *)
+  have ex_cd':
+    "\<exists>(c''::real)>0. \<exists>(d''::nat).
+        \<forall>as s. distinct_subset_sums as \<longrightarrow>
+          steps as s \<le> nat (ceiling (c'' * (real (length as)) ^ d''))"
+    using c'pos poly_n by blast
+
+  (* Contradiction with your lower-bound theorem over DISTINCT families. *)
+  from no_polytime_decider_on_distinct_family ex_cd' show False by blast
+qed
+
+end  (* inner context with E *)
+end  (* SubsetSum_To_Polytime_NoK *)
 
 lemma sum_lessThan_split_at:
   fixes f :: "nat \<Rightarrow> 'a::comm_monoid_add"
@@ -1343,5 +1707,4 @@ proof -
     unfolding distinct_subset_sums_def
     by (simp; metis uniq)
 qed
-
 end
